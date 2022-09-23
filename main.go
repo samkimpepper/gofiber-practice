@@ -7,21 +7,31 @@ import (
 
 	"go-note/ent"
 
+	"github.com/go-redis/redis/v8"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/template/html"
 )
 
+var ctx = context.Background()
+
 func main() {
+	app := Setup()
+
+	app.Listen(":3000")
+}
+
+func Setup() *fiber.App {
 	app := fiber.New(*getConfig())
 	app.Use(cors.New(*getCorsConfig()))
 
 	db := dbConnect()
+	rdb := redisConnect()
 
-	auth.Routes(app.Group("/auth"), db)
+	auth.Routes(app.Group("/auth"), db, rdb)
 
-	app.Listen(":3000")
+	return app
 }
 
 func getConfig() *fiber.Config {
@@ -45,7 +55,7 @@ func dbConnect() *ent.Client {
 
 	//defer client.Close()
 
-	if err := client.Schema.Create(context.Background()); err != nil {
+	if err := client.Schema.Create(ctx); err != nil {
 		log.Fatalf("failed creating schema: %v", err)
 	}
 
@@ -56,4 +66,14 @@ func getCorsConfig() *cors.Config {
 	return &cors.Config{
 		AllowCredentials: true,
 	}
+}
+
+func redisConnect() *redis.Client {
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       0,
+	})
+
+	return rdb
 }

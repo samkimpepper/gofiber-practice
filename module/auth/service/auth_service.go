@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"go-note/infra/exceptions"
+	"go-note/infra/jwt"
 	"go-note/module/auth/entities"
 	"go-note/module/auth/repository"
 	"log"
@@ -14,6 +15,7 @@ import (
 
 type AuthService interface {
 	Register(c *fiber.Ctx) error
+	Login(c *fiber.Ctx) error
 }
 
 type authService struct {
@@ -62,3 +64,56 @@ func verifyPassword(pw, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(pw))
 	return err == nil
 }
+
+// login
+func (s authService) Login(c *fiber.Ctx) error {
+	var dto entities.LoginRequest
+	if err := c.BodyParser(&dto); err != nil {
+		return exceptions.HandleInvalidInputError(c, err)
+	}
+
+	user, err := s.repo.FindByEmail(dto.Email)
+	if err != nil {
+		return entities.HandleUserDoesNotExist(c)
+	}
+
+	if !verifyPassword(dto.Password, user.Password) {
+		return entities.HandleInvalidPassword(c) // 이걸 따로 구분해줘도 되나
+	}
+
+	// 토큰
+	at, err := jwt.GenerateAccessToken(user.ID.String(), user.Email)
+	if err != nil {
+		log.Println("service.authService.Login(): %v", err)
+		return exceptions.HandleInternalServerError(c)
+	}
+
+	rt, err := jwt.GenerateRefreshToken(user.Email)
+	if err != nil {
+		log.Println("service.authService.Login(): %v", err)
+		return exceptions.HandleInternalServerError(c)
+	}
+
+	c.Cookie(&fiber.Cookie{
+		Name:     "refresh_token",
+		Value:    rt.Token,
+		Expires:  rt.ExpAt,
+		HTTPOnly: true,
+		Path:     "/",
+		SameSite: "None",
+	})
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"access_token": at.Token,
+	})
+}
+
+// func (s authService) Logout(c *fiber.Ctx) error {
+// 	rt := c.Cookies("refresh_token")
+// 	if rt == "" {
+// 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+// 			"msg": "Please login to continue",
+// 		})
+// 	}
+
+// }

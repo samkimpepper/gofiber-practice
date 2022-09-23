@@ -21,7 +21,12 @@ var (
 	secretKey  = []byte(os.Getenv("JWT_KEY")) // 이렇게 해도 되나? env 쓰지 말란 글 본적 있는데..
 )
 
-func GenerateAccessToken(userID string, email string) (string, error) {
+type Token struct {
+	Token string
+	ExpAt time.Time
+}
+
+func GenerateAccessToken(userID string, email string) (*Token, error) {
 	claims := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"userID": userID,
 		"email":  email,
@@ -32,12 +37,17 @@ func GenerateAccessToken(userID string, email string) (string, error) {
 
 	token, err := claims.SignedString([]byte(secretKey))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return token, nil
+
+	at := new(Token)
+	at.Token = token
+	at.ExpAt = accessExp.Time
+
+	return at, nil
 }
 
-func GenerateRefreshToken(email string) (string, error) {
+func GenerateRefreshToken(email string) (*Token, error) {
 	claims := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"email": email,
 		"sub":   "REFRESH_TOKEN",
@@ -47,9 +57,14 @@ func GenerateRefreshToken(email string) (string, error) {
 
 	token, err := claims.SignedString([]byte(secretKey))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return token, nil
+
+	rt := new(Token)
+	rt.Token = token
+	rt.ExpAt = refreshExp.Time
+
+	return rt, nil
 }
 
 // access는 claims["userID"]로 내 정보 확인하거나.. (근데 헤더검증으론안쓰나)

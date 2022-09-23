@@ -17,3 +17,9 @@ func HandleInvalidInputError(c *fiber.Ctx, err error) error {
 		"msg": err.Error(),
 	})
 }
+
+func HandleUnauthorizedError(c *fiber.Ctx) error {
+	return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+		"msg": "Please login to continue",
+	})
+}
